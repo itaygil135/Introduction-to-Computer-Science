@@ -1,0 +1,296 @@
+
+import itertools
+class Node:
+	def __init__(self, data, positive_child=None, negative_child=None):
+		self.data = data
+		self.positive_child = positive_child
+		self.negative_child = negative_child
+
+
+
+	def help_bulding(self,symptoms,i):
+		if i < len(symptoms):
+			self.positive_child = Node(symptoms[i])
+			self.negative_child = Node(symptoms[i])
+			self.positive_child.help_bulding(symptoms,i+1)
+			self.negative_child.help_bulding(symptoms,i+1)
+		else:
+			self.positive_child = Node([])
+			self.negative_child = Node([])
+
+	def find_ill(self):
+		if self.positive_child:
+			self.positive_child.find_ill()
+			self.negative_child.find_ill()
+		else:
+			if len(self.data) == 0:
+				self.data = None
+			else:
+				sorter = {}
+				for item in self.data:
+					if item in sorter:
+						sorter[item] = sorter[item] + 1
+					else:
+						sorter[item] = 1
+				self.data = []
+				find_max(sorter, self.data)
+				self.data = self.data[0]
+
+
+
+	def diagnose_sick(self, symptoms):
+		if not self.positive_child:
+			return self.data
+		if self.data in symptoms:
+			return self.positive_child.diagnose_sick(symptoms)
+		else:
+			return self.negative_child.diagnose_sick(symptoms)
+
+	def minimize_tree(self,remove_empty):
+		if self.positive_child.positive_child:
+			self.positive_child.minimize_tree(remove_empty)
+		if self.negative_child.negative_child:
+			self.negative_child.minimize_tree(remove_empty)
+		else:
+			if self.positive_child.data == self.negative_child.data:
+				self.data = self.positive_child.data
+				self.positive_child =  None
+				self.negative_child = None
+			elif remove_empty:
+				if not self.positive_child.data:
+					self.data = self.negative_child.data
+					self.positive_child = None
+					self.negative_child = None
+				elif not self.negative_child.data:
+					self.data = self.positive_child.data
+					self.positive_child = None
+					self.negative_child = None
+
+
+	def collect_ill(self,milon):
+		if self.positive_child:
+			self.positive_child.collect_ill(milon)
+			self.negative_child.collect_ill(milon)
+		else:
+			if self.data:
+				if self.data in milon:
+					milon[self.data] = milon[self.data] + 1
+				else:
+					milon[self.data] = 1
+
+
+
+	def way_to_ill(self,finished_list,mooving_lst,illness):
+		if self.positive_child:
+			mooving_lst.append(True)
+			self.positive_child.way_to_ill(finished_list,mooving_lst,illness)
+			mooving_lst.append(False)
+			self.negative_child.way_to_ill(finished_list,mooving_lst,illness)
+		else:
+			if self.data == illness:
+				finished_list.append(mooving_lst[:])
+		if len(mooving_lst) > 0:
+			mooving_lst.pop()
+		return finished_list
+
+
+	'''def my_way_to_ill(self,finished_list,mooving_lst,illness):
+		if self.positive_child:
+			mooving_lst.append((True,self.data))
+			self.positive_child.my_way_to_ill(finished_list,mooving_lst,illness)
+			mooving_lst.append((False,self.data))
+			self.negative_child.my_way_to_ill(finished_list,mooving_lst,illness)
+		else:
+			if self.data == illness:
+				finished_list.append(mooving_lst[:])
+		if len(mooving_lst) > 0:
+			mooving_lst.pop()
+
+		return finished_list'''
+
+
+
+class Record:
+	def __init__(self, illness, symptoms):
+		self.illness = illness
+		self.symptoms = symptoms
+
+
+
+			
+def parse_data(filepath):
+	with open(filepath) as data_file:
+		records = []
+		for line in data_file:
+			words = line.strip().split()
+			records.append(Record(words[0], words[1:]))
+		return records
+
+
+def find_max(Dict,sorted_list):
+	maxx = 0
+	for key in Dict:
+		if maxx < Dict[key]:
+			maxx = Dict[key]
+	for key in Dict:
+		if Dict[key] == maxx:
+			sorted_list.append(key)
+			Dict.pop(key)
+			break
+
+
+
+class Diagnoser:
+	def __init__(self, root: Node):
+		self.root = root
+		
+	def diagnose(self, symptoms):
+		return self.root.diagnose_sick(symptoms)
+
+
+
+
+	def calculate_success_rate(self, records):
+		if len(records) == 0:
+			raise ValueError('there is no symptoms')
+		passed = 0
+		for rec in records:
+			if self.diagnose(rec.symptoms) == rec.illness:
+				passed = passed + 1
+
+		return  passed/len(records)
+
+
+	def all_illnesses(self):
+		Dict = dict()
+		self.root.collect_ill(Dict)
+		sorted_list = []
+		for i in range(len(Dict)):
+			find_max(Dict,sorted_list)
+		return sorted_list
+
+
+
+	def paths_to_illness(self, illness):
+		finished_list = []
+		mooving_lst = []
+		return (self.root.way_to_ill(finished_list,mooving_lst,illness))
+
+	def my_paths_to_illness(self, illness):
+		finished_list = []
+		mooving_lst = []
+		return self.root.my_way_to_ill(finished_list,mooving_lst,illness)
+
+	def minimize(self, remove_empty=False):
+		if self.root.positive_child:
+			self.root.minimize_tree(remove_empty)
+
+
+
+
+def set_ills(rec,root):
+	if type(root.data) != list:
+		if root.data in rec.symptoms:
+			set_ills(rec,root.positive_child)
+		else:
+			set_ills(rec,root.negative_child)
+	else:
+		root.data.append(rec.illness)
+
+
+
+
+
+
+def build_tree(records, symptoms):
+	for item in records:
+		if type(item) != Record:
+			raise TypeError("there is an item or more inside records which is not type Record")
+
+	if len(symptoms) == 0:
+		root = Node(None)
+		diagnoser = Diagnoser(root)
+		return diagnoser
+
+	for item in symptoms:
+		if type(item) != str:
+			raise TypeError("there is an item or more inside symptoms which is not type string")
+
+
+	root = Node(symptoms[0])
+	root.help_bulding(symptoms,1)
+	for rec in records:
+		set_ills(rec,root)
+	root.find_ill()
+	diagnoser = Diagnoser(root)
+	return diagnoser
+
+
+
+def optimal_tree(records, symptoms, depth):
+	symptomps_combinations = list()
+	for comb in itertools.combinations(symptoms,depth):
+		symptomps_combinations.append(comb)
+	best_diagnoser = Diagnoser(Node(None))
+	for comb in symptomps_combinations:
+		best_rate = best_diagnoser.calculate_success_rate(records)
+
+		current_tree = build_tree(records,comb)
+		if best_rate < current_tree.calculate_success_rate(records):
+			best_diagnoser = current_tree
+	return best_diagnoser
+
+
+
+if __name__ == "__main__":
+	
+	# Manually build a simple tree.
+	#                cough
+	#          Yes /       \ No
+	#        fever           healthy
+	#   Yes /     \ No
+	# covid-19   cold
+	
+	'''flu_leaf = Node("covid-19", None, None)
+	cold_leaf = Node("cold", None, None)
+	inner_vertex = Node("fever", flu_leaf, cold_leaf)
+	healthy_leaf = Node("healthy", None, None)
+	root = Node("cough", inner_vertex, healthy_leaf)
+	
+	diagnoser = Diagnoser(root)
+	
+	# Simple test
+	diagnosis = diagnoser.diagnose(["cough"])
+	if diagnosis == "cold":
+		print("Test passed")
+	else:
+		print("Test failed. Should have printed cold, printed: ", diagnosis)'''
+
+	rec1 = Record("covid-19",["fever","cough"])
+	rec4 = Record("covid-19",["fever","cough"])
+	rec2 = Record("no",["fever","cough"])
+	rec3 = Record("no",[])
+	record_list=[rec3,rec2,rec1, rec4]
+
+	record_list=parse_data("./Data/tiny_data.txt")
+
+	#rate = diagnoser.calculate_success_rate(record_list)
+
+	#diagnoser.all_illnesses()
+	symptoms = ['koko', 'fever ','fatigue','headache'
+		,'nausea', 'cough',
+				'sore_throat', 'muscle_ache','congestion','irritability',
+				'rigidity']
+	'''
+	diagnoser = build_tree(record_list, symptoms)
+
+	illness_list = diagnoser.all_illnesses()
+	for illness in illness_list:
+	 	print(illness,"  ", diagnoser.paths_to_illness(illness))
+	'''
+
+
+	optimal_diagnoser = optimal_tree(record_list, symptoms, 2)
+	print(type(optimal_diagnoser))
+	optimal_diagnoser.minimize(True)
+

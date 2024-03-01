@@ -1,0 +1,4 @@
+import hangman
+
+
+hangman.main()
